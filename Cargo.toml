@@ -1,6 +1,6 @@
 [package]
 name = "actix-redis"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Nikolay Kim <fafhrd91@gmail.com>"]
 description = "Redis integration for actix framework"
 license = "MIT/Apache-2.0"
