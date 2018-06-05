@@ -11,6 +11,7 @@ use futures::future::{err as FutErr, ok as FutOk, Either};
 use futures::Future;
 use http::header::{self, HeaderValue};
 use rand::{self, Rng};
+use rand::distributions::Alphanumeric;
 use redis_async::resp::RespValue;
 use serde_json;
 
@@ -194,7 +195,7 @@ impl Inner {
             (value.clone(), None)
         } else {
             let mut rng = rand::OsRng::new().unwrap();
-            let value = String::from_iter(rng.gen_ascii_chars().take(32));
+            let value = String::from_iter(rng.sample_iter(&Alphanumeric).take(32));
 
             let mut cookie = Cookie::new(self.name.clone(), value.clone());
             cookie.set_path("/");
