@@ -86,6 +86,20 @@ impl RedisSessionBackend {
         }))
     }
 
+    pub fn new_db<S: Into<String>>(addr: S, db: u8, key: &[u8]) -> RedisSessionBackend {
+        RedisSessionBackend(Rc::new(Inner {
+            key: Key::from_master(key),
+            ttl: "7200".to_owned(),
+            addr: RedisActor::start_db(addr, db),
+            name: "actix-session".to_owned(),
+            path: "/".to_owned(),
+            domain: None,
+            secure: false,
+            max_age: Some(Duration::days(7)),
+            same_site: None,
+        }))
+    }
+
     /// Set time to live in seconds for session value
     pub fn ttl(mut self, ttl: u16) -> Self {
         Rc::get_mut(&mut self.0).unwrap().ttl = format!("{}", ttl);
