@@ -231,62 +231,85 @@ impl Inner {
         state: impl Iterator<Item = (String, String)>,
         value: Option<String>,
     ) -> impl Future<Item = ServiceResponse<B>, Error = Error> {
-        let (value, jar) = if let Some(value) = value {
-            (value.clone(), None)
-        } else {
-            let mut rng = OsRng::new().unwrap();
-            let value: String = iter::repeat(())
-                .map(|()| rng.sample(Alphanumeric))
-                .take(32)
-                .collect();
-
-            // prepare session id cookie
-            let mut cookie = Cookie::new(self.name.clone(), value.clone());
-            cookie.set_path(self.path.clone());
-            cookie.set_secure(self.secure);
-            cookie.set_http_only(true);
-
-            if let Some(ref domain) = self.domain {
-                cookie.set_domain(domain.clone());
-            }
-
-            if let Some(max_age) = self.max_age {
-                cookie.set_max_age(max_age);
-            }
-
-            if let Some(same_site) = self.same_site {
-                cookie.set_same_site(same_site);
-            }
-
-            // set cookie
-            let mut jar = CookieJar::new();
-            jar.signed(&self.key).add(cookie);
-
-            (value, Some(jar))
-        };
-
         let state: HashMap<_, _> = state.collect();
 
-        match serde_json::to_string(&state) {
-            Err(e) => Either::A(err(e.into())),
-            Ok(body) => Either::B(
-                self.addr
-                    .send(Command(resp_array!["SET", value, body, "EX", &self.ttl]))
-                    .map_err(Error::from)
-                    .and_then(move |redis_result| match redis_result {
-                        Ok(_) => {
-                            if let Some(jar) = jar {
-                                for cookie in jar.delta() {
-                                    let val =
-                                        HeaderValue::from_str(&cookie.to_string())?;
-                                    res.headers_mut().append(header::SET_COOKIE, val);
+        if !state.is_empty() {
+            let (value, jar) = if let Some(value) = value {
+                (value.clone(), None)
+            } else {
+                let mut rng = OsRng::new().unwrap();
+                let value: String = iter::repeat(())
+                    .map(|()| rng.sample(Alphanumeric))
+                    .take(32)
+                    .collect();
+
+                // prepare session id cookie
+                let mut cookie = Cookie::new(self.name.clone(), value.clone());
+                cookie.set_path(self.path.clone());
+                cookie.set_secure(self.secure);
+                cookie.set_http_only(true);
+
+                if let Some(ref domain) = self.domain {
+                    cookie.set_domain(domain.clone());
+                }
+
+                if let Some(max_age) = self.max_age {
+                    cookie.set_max_age(max_age);
+                }
+
+                if let Some(same_site) = self.same_site {
+                    cookie.set_same_site(same_site);
+                }
+
+                let mut jar = CookieJar::new();
+                jar.signed(&self.key).add(cookie);
+
+                (value, Some(jar))
+            };
+            Either::A(match serde_json::to_string(&state) {
+                Err(e) => Either::A(err(e.into())),
+                Ok(body) => Either::B(
+                    self.addr
+                        .send(Command(resp_array!["SET", value, body, "EX", &self.ttl]))
+                        .map_err(Error::from)
+                        .and_then(|redis_result| match redis_result {
+                            Ok(_) => {
+                                if let Some(jar) = jar {
+                                    for cookie in jar.delta() {
+                                        let val =
+                                            HeaderValue::from_str(&cookie.to_string())?;
+                                        res.headers_mut()
+                                            .append(header::SET_COOKIE, val);
+                                    }
                                 }
+                                Ok(res)
                             }
-                            Ok(res)
-                        }
-                        Err(err) => Err(error::ErrorInternalServerError(err)),
-                    }),
-            ),
+                            Err(err) => Err(error::ErrorInternalServerError(err)),
+                        }),
+                ),
+            })
+        } else {
+            Either::B(if let Some(value) = value {
+                Either::A({
+                    let cookie = Cookie::build(self.name.clone(), "")
+                        .max_age(0)
+                        .expires(time::empty_tm())
+                        .finish();
+                    self.addr
+                        .send(Command(resp_array!["DEL", value]))
+                        .map_err(Error::from)
+                        .and_then(move |redis_result| match redis_result {
+                            Ok(_) => {
+                                let val = HeaderValue::from_str(&cookie.to_string())?;
+                                res.headers_mut().append(header::SET_COOKIE, val);
+                                Ok(res)
+                            }
+                            Err(err) => Err(error::ErrorInternalServerError(err)),
+                        })
+                })
+            } else {
+                Either::B(ok(res))
+            })
         }
     }
 }
