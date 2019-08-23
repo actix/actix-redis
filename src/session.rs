@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::{collections::HashMap, iter, rc::Rc};
 
-use actix::prelude::*;
+use actix::Addr;
 use actix_service::{Service, Transform};
 use actix_session::{Session, SessionStatus};
 use actix_web::cookie::{Cookie, CookieJar, Key, SameSite};
@@ -11,10 +11,9 @@ use actix_web::{error, Error, HttpMessage};
 use futures::future::{err, ok, Either, Future, FutureResult};
 use futures::Poll;
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
-use redis_async::resp::RespValue;
 use time::{self, Duration};
 
-use crate::redis::{Command, RedisActor};
+use crate::redis::{RedisActor, RedisCmd, RedisValue};
 
 /// Use redis as session storage.
 ///
@@ -32,7 +31,7 @@ impl RedisSession {
     pub fn new<S: Into<String>>(addr: S, key: &[u8]) -> RedisSession {
         RedisSession(Rc::new(Inner {
             key: Key::from_master(key),
-            ttl: "7200".to_owned(),
+            ttl: 7200,
             addr: RedisActor::start(addr),
             name: "actix-session".to_owned(),
             path: "/".to_owned(),
@@ -44,8 +43,8 @@ impl RedisSession {
     }
 
     /// Set time to live in seconds for session value
-    pub fn ttl(mut self, ttl: u16) -> Self {
-        Rc::get_mut(&mut self.0).unwrap().ttl = format!("{}", ttl);
+    pub fn ttl(mut self, ttl: i64) -> Self {
+        Rc::get_mut(&mut self.0).unwrap().ttl = ttl;
         self
     }
 
@@ -126,7 +125,7 @@ where
     type Request = ServiceRequest;
     type Response = ServiceResponse<B>;
     type Error = Error;
-    type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
+    type Future = Box<dyn Future<Item = Self::Response, Error = Self::Error>>;
 
     fn poll_ready(&mut self) -> Poll<(), Self::Error> {
         self.service.borrow_mut().poll_ready()
@@ -198,7 +197,7 @@ where
 
 struct Inner {
     key: Key,
-    ttl: String,
+    ttl: i64,
     addr: Addr<RedisActor>,
     name: String,
     path: String,
@@ -223,23 +222,12 @@ impl Inner {
                         let value = cookie.value().to_owned();
                         return Either::A(
                             self.addr
-                                .send(Command(resp_array!["GET", cookie.value()]))
+                                .send(RedisCmd::Get(cookie.value().to_string()))
                                 .map_err(Error::from)
-                                .and_then(move |res| match res {
+                                .and_then(|res| match res {
                                     Ok(val) => {
                                         match val {
-                                            RespValue::Error(err) => {
-                                                return Err(
-                                                    error::ErrorInternalServerError(err),
-                                                );
-                                            }
-                                            RespValue::SimpleString(s) => {
-                                                if let Ok(val) = serde_json::from_str(&s)
-                                                {
-                                                    return Ok(Some((val, value)));
-                                                }
-                                            }
-                                            RespValue::BulkString(s) => {
+                                            RedisValue::Data(s) => {
                                                 if let Ok(val) =
                                                     serde_json::from_slice(&s)
                                                 {
@@ -308,9 +296,9 @@ impl Inner {
             Err(e) => Either::A(err(e.into())),
             Ok(body) => Either::B(
                 self.addr
-                    .send(Command(resp_array!["SET", value, body, "EX", &self.ttl]))
+                    .send(RedisCmd::SetWithEx(value, body, self.ttl))
                     .map_err(Error::from)
-                    .and_then(move |redis_result| match redis_result {
+                    .and_then(|redis_result| match redis_result {
                         Ok(_) => {
                             if let Some(jar) = jar {
                                 for cookie in jar.delta() {
@@ -330,12 +318,12 @@ impl Inner {
     /// removes cache entry
     fn clear_cache(&self, key: String) -> impl Future<Item = (), Error = Error> {
         self.addr
-            .send(Command(resp_array!["DEL", key]))
+            .send(RedisCmd::Del(key))
             .map_err(Error::from)
             .and_then(|res| {
                 match res {
                     // redis responds with number of deleted records
-                    Ok(RespValue::Integer(x)) if x > 0 => Ok(()),
+                    Ok(RedisValue::Int(x)) if x > 0 => Ok(()),
                     _ => Err(error::ErrorInternalServerError(
                         "failed to remove session from cache",
                     )),
@@ -367,7 +355,7 @@ mod test {
     use actix_web::{
         middleware, web,
         web::{get, post, resource},
-        App, HttpResponse, HttpServer, Result,
+        App, HttpResponse, Result,
     };
     use serde::{Deserialize, Serialize};
     use serde_json::json;
@@ -466,7 +454,7 @@ mod test {
             HttpService::new(
                 App::new()
                     .wrap(
-                        RedisSession::new("127.0.0.1:6379", &[0; 32])
+                        RedisSession::new("redis://127.0.0.1:6379", &[0; 32])
                             .cookie_name("test-session"),
                     )
                     .wrap(middleware::Logger::default())

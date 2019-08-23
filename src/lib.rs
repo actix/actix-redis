@@ -9,13 +9,13 @@
 //!
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate redis_async;
+
 #[macro_use]
 extern crate derive_more;
 
+extern crate redis as redisrs;
+
 mod redis;
-pub use redis::{Command, RedisActor};
 
 #[cfg(feature = "web")]
 mod session;
@@ -28,15 +28,11 @@ pub use session::RedisSession;
 #[derive(Debug, Display, From)]
 pub enum Error {
     #[display(fmt = "Redis error {}", _0)]
-    Redis(redis_async::error::Error),
+    Redis(redisrs::RedisError),
     /// Receiving message during reconnecting
     #[display(fmt = "Redis: Not connected")]
     NotConnected,
-    /// Cancel all waters when connection get dropped
-    #[display(fmt = "Redis: Disconnected")]
-    Disconnected,
 }
 
 // re-export
-pub use redis_async::error::Error as RespError;
-pub use redis_async::resp::RespValue;
+pub use crate::redis::{RedisCmd, RedisActor, RedisValue};

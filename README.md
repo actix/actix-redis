@@ -1,4 +1,4 @@
-# Actix redis [![Build Status](https://travis-ci.org/actix/actix-redis.svg?branch=master)](https://travis-ci.org/actix/actix-redis) [![codecov](https://codecov.io/gh/actix/actix-redis/branch/master/graph/badge.svg)](https://codecov.io/gh/actix/actix-redis) [![crates.io](http://meritbadge.herokuapp.com/actix-redis)](https://crates.io/crates/actix-redis) 
+# Actix redis [![Build Status](https://travis-ci.org/actix/actix-redis.svg?branch=master)](https://travis-ci.org/actix/actix-redis) [![codecov](https://codecov.io/gh/actix/actix-redis/branch/master/graph/badge.svg)](https://codecov.io/gh/actix/actix-redis) [![crates.io](http://meritbadge.herokuapp.com/actix-redis)](https://crates.io/crates/actix-redis)
 
 Redis integration for actix framework.
 
@@ -8,7 +8,7 @@ Redis integration for actix framework.
 * [API Documentation (Releases)](https://docs.rs/actix-redis/)
 * [Chat on gitter](https://gitter.im/actix/actix)
 * Cargo package: [actix-redis](https://crates.io/crates/actix-redis)
-* Minimum supported Rust version: 1.26 or later
+* Minimum supported Rust version: 1.27 or later
 
 
 ## Redis session backend
@@ -42,7 +42,7 @@ fn main() {
             .middleware(middleware::Logger::default())
             // cookie session middleware
             .middleware(SessionStorage::new(
-                RedisSessionBackend::new("127.0.0.1:6379", &[0; 32])
+                RedisSessionBackend::new("redis://127.0.0.1:6379", &[0; 32])
             ))
             // register simple route, handle all methods
             .resource("/", |r| r.f(index)))
