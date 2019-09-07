@@ -126,7 +126,7 @@ where
     type Request = ServiceRequest;
     type Response = ServiceResponse<B>;
     type Error = Error;
-    type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
+    type Future = Box<dyn Future<Item = Self::Response, Error = Self::Error>>;
 
     fn poll_ready(&mut self) -> Poll<(), Self::Error> {
         self.service.borrow_mut().poll_ready()
@@ -351,7 +351,7 @@ impl Inner {
         cookie.set_expires(time::now() - Duration::days(365));
 
         let val = HeaderValue::from_str(&cookie.to_string())
-            .map_err(|err| error::ErrorInternalServerError(err))?;
+            .map_err(error::ErrorInternalServerError)?;
         res.headers_mut().append(header::SET_COOKIE, val);
 
         Ok(())
