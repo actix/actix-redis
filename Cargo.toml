@@ -50,7 +50,7 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 serde_json = { version = "1.0.40", optional = true }
 env_logger = "0.6.2"
 actix-http-test = "0.2.5"
-actix-http = "0.2.11"
+actix-http = "0.3.0-alpha.2"
 
 [dev-dependencies]
 env_logger = "0.6"
