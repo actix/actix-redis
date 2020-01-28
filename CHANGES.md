@@ -1,5 +1,9 @@
 # Changes
 
+## [Unreleased] 2019-xx-xx
+
+* Update the `time` dependency to 0.2.5
+
 ## [0.8.0] 2019-12-20
 
 * Release
