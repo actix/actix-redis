@@ -2,6 +2,8 @@
 
 Redis integration for actix framework.
 
+**NOTICE: This repository has been archived. Please visit https://github.com/actix/actix-extras instead.**
+
 ## Documentation
 
 * [API Documentation](http://actix.github.io/actix-redis/actix_redis/)
